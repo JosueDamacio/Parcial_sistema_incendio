@@ -16,7 +16,6 @@ LiquidCrystal LCD(2, 3, 4, 5, 6, 7);
 #define btn_2 0xEE11BF00
 #define btn_3 ED12BF00
 
-#define btn_apaga_prende FF00BF00
 Servo servo_alarma;
 
 void setup()
@@ -25,7 +24,6 @@ void setup()
   pinMode(led_sistema_activo, OUTPUT);
 	pinMode(led_sistema_inactivo, OUTPUT);
 
-  Serial.begin(9600);
   IrReceiver.begin(sensorIR, DISABLE_LED_FEEDBACK);
 	servo_alarma.attach(10);
 }
