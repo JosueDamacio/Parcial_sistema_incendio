@@ -2,99 +2,156 @@
 #include <IRremote.h>
 #include <Servo.h>
 
+int flag_sistema = LOW;
+int flag_incendio = LOW;
+String estacion = "Otonio";
+int temperatura_actual = 0;
+int temp_maxima = 32;
+int contador_veces_presionado = 0;
 
-int estado_incendio = LOW;
-int temperatura = 0;
-
-#define led_sistema_inactivo 12
-#define led_sistema_activo 13
+#define led_incendio_inactivo 12
+#define led_incendio_activo 13
 #define sensorIR 11
 
 LiquidCrystal LCD(2, 3, 4, 5, 6, 7);
 
+#define btn_encender_apagar 0xFF00BF00
+
 #define btn_1 0xEF10BF00
 #define btn_2 0xEE11BF00
-#define btn_3 ED12BF00
+#define btn_3 0xED12BF00
+#define btn_4 0xEB14BF00
 
 Servo servo_alarma;
 
 void setup()
 {
   LCD.begin(16, 2);
-  pinMode(led_sistema_activo, OUTPUT);
-	pinMode(led_sistema_inactivo, OUTPUT);
+  pinMode(led_incendio_activo, OUTPUT);
+  pinMode(led_incendio_inactivo, OUTPUT);
 
+  Serial.begin(9600);
   IrReceiver.begin(sensorIR, DISABLE_LED_FEEDBACK);
-	servo_alarma.attach(10);
+  servo_alarma.attach(10);
 }
 
-void loop(){
-    temperatura = analogRead(A0);
-    temperatura = map(temperatura,20,358,-40,125);  
-  	if(temperatura < 43 && estado_incendio == LOW){
-    	determinar_estacion();
-	}
-  	activacion_manual();
-  	incendio();
- 	
-  	delay(1000);
+void loop()
+{
+  
+  if (IrReceiver.decode())
+  {
+    estado_sistema();
+    calcular_estacion();
+    IrReceiver.resume();
+  }
 
-}
-void determinar_estacion(){
-  	LCD.clear();
-    
-    if  (temperatura < 20){
-        LCD.print("invierno");
-    }else if (temperatura < 25){
-      	LCD.print("otonio");
-    }else if (temperatura < 34){
-       	LCD.print("primavera");
-    }else if (temperatura <= 42){
-        LCD.print("verano");
-    }else incendio();
-  	LCD.setCursor(0, 1);
-    LCD.print(temperatura);
-  	LCD.print("  grados C");
+  if (flag_sistema == LOW)
+  {
+    mensaje_sistema_apagado();
+    servo_desactivado();
+    digitalWrite(led_incendio_inactivo, LOW);
+    digitalWrite(led_incendio_activo, LOW);
+  }
+  else if (flag_sistema == HIGH)
+  {
+    temperatura_actual = analogRead(A0);
+    temperatura_actual = map(temperatura_actual, 20, 358, -40, 125);
 
-}
-
-void activacion_manual(){
-	if (IrReceiver.decode()){
-      	if (IrReceiver.decodedIRData.decodedRawData == btn_1){
-      estado_incendio = HIGH;
-      	}
-        if (IrReceiver.decodedIRData.decodedRawData == btn_2){
-			estado_incendio = LOW;
-      	}
-		IrReceiver.resume();
-	}
-}
-void incendio(){
-
-    if((temperatura >= 43 || estado_incendio == HIGH)){
-        digitalWrite(led_sistema_activo, HIGH);
-        digitalWrite(led_sistema_inactivo, LOW);
-        servo_activado();
-        mensaje_incendio();
-    }
-
-    else if(temperatura <= 43 ||estado_incendio == LOW){
-        digitalWrite(led_sistema_activo, LOW);
-        digitalWrite(led_sistema_inactivo, HIGH);
-        servo_desactivado();
-    }
-}
-
-void servo_activado(){
-  servo_alarma.write(20);
+    estado_incendio();
+  }
   delay(500);
-  servo_alarma.write(90);
-  delay(500);
-  servo_alarma.write(180);
-  delay(500);
-  servo_alarma.write(90);
-  delay(500);
-  servo_alarma.write(20);
+}
+
+void estado_sistema()
+{
+  if (IrReceiver.decodedIRData.decodedRawData == btn_encender_apagar && flag_sistema == LOW)
+  {
+    flag_sistema = HIGH;
+  }
+  else if (IrReceiver.decodedIRData.decodedRawData == btn_encender_apagar && flag_sistema == HIGH)
+  {
+    flag_sistema = LOW;
+  }
+}
+
+void mensaje_sistema_apagado()
+{
+  LCD.clear();
+  LCD.print("SISTEMA");
+  LCD.setCursor(0, 1);
+  LCD.print("APAGADO");
+}
+
+void calcular_estacion()
+{
+  if (IrReceiver.decodedIRData.decodedRawData == btn_1)
+  {
+    estacion = "Invierno";
+    temp_maxima = 28;
+  }
+  else if (IrReceiver.decodedIRData.decodedRawData == btn_2)
+  {
+    estacion = "Otonio";
+    temp_maxima = 32;
+  }
+  else if (IrReceiver.decodedIRData.decodedRawData == btn_3)
+  {
+    estacion = "Primavera";
+    temp_maxima = 40;
+  }
+  else if (IrReceiver.decodedIRData.decodedRawData == btn_4)
+  {
+    estacion = "Verano";
+    temp_maxima = 52;
+  }
+}
+
+void mostrar_estacion_LCD()
+{
+  LCD.clear();
+  LCD.print(estacion);
+  LCD.print(" ");
+  LCD.print(temperatura_actual);
+  LCD.print(" C");
+  LCD.setCursor(0, 1);
+  LCD.print("TempMax: ");
+  LCD.print(temp_maxima);
+}
+
+void estado_incendio()
+{
+  if (temperatura_actual > temp_maxima && flag_sistema == HIGH)
+  {
+    digitalWrite(led_incendio_activo, HIGH);
+    digitalWrite(led_incendio_inactivo, LOW);
+    servo_activado();
+    mensaje_incendio();
+    flag_incendio = HIGH;
+  }
+  else if (temperatura_actual < temp_maxima)
+  {
+    digitalWrite(led_incendio_activo, LOW);
+    digitalWrite(led_incendio_inactivo, HIGH);
+    servo_desactivado();
+    flag_incendio = LOW;
+    mostrar_estacion_LCD();
+  }
+}
+
+void servo_activado()
+{
+  if (flag_sistema == HIGH)
+  {
+    servo_alarma.write(20);
+    delay(500);
+    servo_alarma.write(90);
+    delay(500);
+    servo_alarma.write(180);
+    delay(500);
+    servo_alarma.write(90);
+    delay(500);
+    servo_alarma.write(20);
+  }
 }
 
 void servo_desactivado()
@@ -105,7 +162,8 @@ void servo_desactivado()
 void mensaje_incendio()
 {
   LCD.clear();
-  LCD.print("ALERTA");
-  LCD.setCursor(0,1);
-  LCD.print("INCENDIO");
+  LCD.print("ALERTA INCENDIO");
+  LCD.setCursor(0, 1);
+  LCD.print("Temp:  ");
+  LCD.print(temperatura_actual);
 }
